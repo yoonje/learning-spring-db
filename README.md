@@ -130,6 +130,67 @@ public class ConnectionTest {
 
 스프링과 트랜잭션 문제 해결
 =======
+- `트랜잭션 추상화 및 동기화`
+  - 트랜잭션을 추상화하지 않으면 트랜잭션 적용을 위해 `JDBC 및 JPA 구현 기술이 서비스 계층에 누수`되고 `예외(SQLException) 처리도 누수`되며 트랜잭션을 위한 `반복적인 JDBC 트랜잭션 코드 또는 JPA 트랜잭션 코드가 사용`되어 문제
+  - 트랜잭션의 리소스를 동기화하지 않으면 커넥션이 달라져서 트랜잭션 처리에 문제가 발생하므로 파라미터로 커넥션을 넘겨줘야하는데 이는 중복 코드가 많이 생성됨
+- `트랜잭션 매니저와 트랜잭션 동기화 매니저`
+  - 트랜잭션 매니저: JDBC 및 JPA 구현 기술 등등의 다양한 구현 기술을 통일한 인터페이스
+  ```java
+  public interface PlatformTransactionManager extends TransactionManager {
+    TransactionStatus getTransaction(@Nullable TransactionDefinition definition) throws TransactionException; //  트랜잭션을 시작
+    void commit(TransactionStatus status) throws TransactionException; // 트랜잭션을 커밋
+    void rollback(TransactionStatus status) throws TransactionException; // 트랜잭션을 롤백
+  }
+  ```
+    - JdbcTransactionManager: JDBC 트랜잭션 기능을 제공하는 PlatformTransactionManager의 구현체
+    - JpaTransactionManager: JPA 트랜잭션 기능을 제공하는 PlatformTransactionManager의 구현체
+  - 트랜잭션 동기화 매니저: 쓰레드 로컬을 사용해서 멀티쓰레드 상황에서도 안전하게 커넥션을 동기화하여 커넥션을 보관하고 관리해줌
+- `트랜잭션 템플릿`
+  - 트랜잭션을 시작하고 비즈니스 로직을 실행하고 성공하면 커밋하고 예외가 발생해서 실패하면 롤백하는 과정이 반복되는데 반복하는 코드를 많이 제거하기 위해 트랜잭션 템플릿 사용
+  ```java
+  public class TransactionTemplate {
+      private PlatformTransactionManager transactionManager;
+      public <T> T execute(TransactionCallback<T> action){..} // 응답 값이 있을 때 사용
+      void executeWithoutResult(Consumer<TransactionStatus> action){..} // 응답 값이 없을 때 사용
+  }
+  ```
+- `트랙잭션 AOP`
+  - 트랜잭션 매니저 및 트랜잭션 템플릿을 통합하여 프록시 기반와 스프링 AOP를 기반으로 제공하는 `@Transactional`을 사용하면 스프링이 트랜잭션을 편리하게 처리
+  - @Transactional 애노테이션은 메서드에 붙이면 해당 메서드만 AOP의 대상이 되고 클래스에 붙이면 외부에서 호출 가능한 public 메서드가 AOP 적용 대상이 됨
+  - 어드바이저: BeanFactoryTransactionAttributeSourceAdvisor
+  - 포인트컷: TransactionAttributeSourcePointcut
+  - 어드바이스: TransactionInterceptor
+  ```java
+  @Slf4j
+  @RequiredArgsConstructor
+  public class MemberServiceV3_3 {
+
+    private final MemberRepositoryV3 memberRepository;
+    
+    @Transactional
+    public void accountTransfer(String fromId, String toId, int money) throws SQLException {
+        bizLogic(fromId, toId, money);
+    }
+
+    private void bizLogic(String fromId, String toId, int money) throws SQLException {
+      Member fromMember = memberRepository.findById(fromId); 
+      Member toMember = memberRepository.findById(toId);
+      memberRepository.update(fromId, fromMember.getMoney() - money); 
+      validation(toMember);
+      memberRepository.update(toId, toMember.getMoney() + money);
+    }
+    
+    private void validation(Member toMember) {
+      if (toMember.getMemberId().equals("ex")) {
+        throw new IllegalStateException("이체중 예외 발생"); 
+      }
+    }   
+  }
+  ```
+- `스프링 부트의 자동 리소스 등록`
+  - 스프링 부트가 등장하기 이전에는 데이터 소스와 트랜잭션 매니저를 개발자가 직접 스프링 빈으로 등록해서 사용
+  - 데이터 소스는 application.properties 에 있는 속성을 사용해서 DataSource(HikariDataSource)를 생성
+  - 스프링 부트는 적절한 트랜잭션 매니저(PlatformTransactionManager)를 자동으로 스프링 빈에 등록
 
 자바 예외 이해
 =======
