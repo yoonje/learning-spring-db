@@ -232,3 +232,104 @@ public class ConnectionTest {
 
 스프링과 예외 문제 해결
 =======
+- `체크 예외 의존 제거를 위한 란타임 예외`
+  - 서비스가 처리할 수 없으므로 `SQLException`같은 체크 예외를 런타임 예외로 전환해서 서비스 계층에 던져서 체크 예외에 대한 의존을 제거할 수 있음
+  ```java
+  public class MyDbException extends RuntimeException {
+      public MyDbException() {}
+      public MyDbException(String message) {
+          super(message);
+      }
+      public MyDbException(String message, Throwable cause) {
+          super(message, cause);
+      }
+      public MyDbException(Throwable cause) {
+          super(cause);
+      }
+  }
+  ```
+  ```java
+  public Member findById(String memberId) {
+    String sql = "select * from member where member_id = ?";
+    Connection con = null;
+    PreparedStatement pstmt = null;
+    ResultSet rs = null;
+    
+    try {
+      con = getConnection();
+      pstmt = con.prepareStatement(sql); 
+      pstmt.setString(1, memberId);
+
+      rs = pstmt.executeQuery();
+
+      if (rs.next()) {
+        Member member = new Member(); 
+        member.setMemberId(rs.getString("member_id")); 
+        member.setMoney(rs.getInt("money"));
+        return member;  
+      } else {
+            throw new NoSuchElementException("member not found memberId=" +  memberId);
+      }
+      } catch (SQLException e) {
+        throw new MyDbException(e); // SQLException를 감싸고 언체크 예외로 변환
+      } finally {
+        close(con, pstmt, rs);
+      }
+  }
+  ```
+- `스프링 예외 추상화`
+  - 스프링은 앞서 설명한 문제들을 해결하기 위해 데이터 접근과 관련된 예외를 추상화해서 제공
+  <img width="983" alt="스크린샷 2022-07-27 오전 3 56 44" src="https://user-images.githubusercontent.com/38535571/181089316-443a8a45-7559-44ae-973d-5459abebdb9c.png">
+  - Transient 는 일시적이라는 뜻으로 Transient 하위 예외는 동일한 SQL을 다시 시도했을 때 성공할 가능성이 있음
+  - NonTransient 는 일시적이지 않다는 뜻이으로 같은 SQL을 그대로 반복해서 실행하면 실패
+- `스프링 예외 변환기`
+  - SQLExceptionTranslator인 스프링 예외 변환기를 통해서 ErrorCode까지 고려된 예외로 변환 가능
+  - `sql-error-codes.xml`에 RDBMS 별로 에러 코드가 지정되어 있고 스프링 예외 변환기는 그것을 통해서 예외 변환
+  ```java
+  @Override
+  public Member save(Member member) {
+    String sql = "insert into member(member_id, money) values(?, ?)"; 
+    Connection con = null;
+    PreparedStatement pstmt = null;
+    
+    try {
+      con = getConnection();
+      pstmt = con.prepareStatement(sql); 
+      pstmt.setString(1, member.getMemberId()); 
+      pstmt.setInt(2, member.getMoney()); 
+      pstmt.executeUpdate();
+      return member;
+    } catch (SQLException e) {
+      throw exTranslator.translate("save", sql, e); // errorCode까지 고려된 예외 변환
+    } finally {
+      close(con, pstmt, null);
+    } 
+  }
+  ```
+- `JDBC 반복 문제 해결 - JdbcTemplate`
+  - 리포지토리에서 JDBC를 사용하기 때문에 발생하는 JDBC 반복 문제를 해결을 위해 JdbcTemplate 사용
+  - JdbcTemplate 은 JDBC로 개발할 때 발생하는 반복을 대부분 해결해주며 트랜잭션을 위한 커넥션 동기화는 물론이고 예외 발생시 스프링 예외 변환기도 자동으로 실행
+  ```java
+  @Slf4j
+  public class MemberRepositoryV5 implements MemberRepository {
+    
+    private final JdbcTemplate template;
+    
+    public MemberRepositoryV5(DataSource dataSource) {
+          template = new JdbcTemplate(dataSource);
+    }
+
+    @Override
+    public Member save(Member member) {
+      String sql = "insert into member(member_id, money) values(?, ?)"; 
+      template.update(sql, member.getMemberId(), member.getMoney()); 
+      return member;
+    }
+  }
+  ```
+- `JDBC 반복 코드`
+  - 커넥션 조회, 커넥션 동기화
+  - PreparedStatement 생성 및 파라미터 바인딩 쿼리 실행
+  - 결과 바인딩
+  - 예외 발생시 스프링 예외 변환기 실행
+  - 리소스 종료
