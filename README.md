@@ -195,12 +195,13 @@ public class ConnectionTest {
 자바 예외 이해
 =======
 - `자바 예외 계층`
-<img width="973" alt="스크린샷 2022-07-26 오전 1 05 08" src="https://user-images.githubusercontent.com/38535571/180824011-d14e28bf-f617-462a-bd7b-a10e3910babc.png">
   - Object: 예외도 객체이므로 모든 객체의 최상위 부모는 Object 
   - Throwable: 최상위 예외로 하위에 Exception과 Error가 존재
   - Error: 메모리 부족이나 심각한 시스템 오류와 같이 애플리케이션에서 복구 불가능한 시스템 예외로 애플리케이션에서 잡으면 안되는 예외
   - Exception: `체크 예외`, 애플리케이션 로직에서 사용할 수 있는 실질적인 최상위 예외로 RuntimeException을 제외한 `Exception과 Exception의 자식들은 모두 체크 예외` (컴파일러가 체크하는 예외)
   - RuntimeException: `언체크 예외`, 런타임 예외로 `RuntimeException 과 그 자식 예외는 모두 언체크 예외` (컴파일러가 체크하지 않는 예외)
+  
+  <img width="973" alt="스크린샷 2022-07-26 오전 1 05 08" src="https://user-images.githubusercontent.com/38535571/180824011-d14e28bf-f617-462a-bd7b-a10e3910babc.png">
 
 - `자바 예외 기본 규칙`
   - 예외가 발생하면 예외를 처리하거나 예외를 처리하지 못하면 호출한 곳으로 예외를 계속 던지게 됨
@@ -279,9 +280,9 @@ public class ConnectionTest {
   ```
 - `스프링 예외 추상화`
   - 스프링은 앞서 설명한 문제들을 해결하기 위해 데이터 접근과 관련된 예외를 추상화해서 제공
-  <img width="983" alt="스크린샷 2022-07-27 오전 3 56 44" src="https://user-images.githubusercontent.com/38535571/181089316-443a8a45-7559-44ae-973d-5459abebdb9c.png">
   - Transient 는 일시적이라는 뜻으로 Transient 하위 예외는 동일한 SQL을 다시 시도했을 때 성공할 가능성이 있음
   - NonTransient 는 일시적이지 않다는 뜻이으로 같은 SQL을 그대로 반복해서 실행하면 실패
+  <img width="983" alt="스크린샷 2022-07-27 오전 3 56 44" src="https://user-images.githubusercontent.com/38535571/181089316-443a8a45-7559-44ae-973d-5459abebdb9c.png">
 - `스프링 예외 변환기`
   - SQLExceptionTranslator인 스프링 예외 변환기를 통해서 ErrorCode까지 고려된 예외로 변환 가능
   - `sql-error-codes.xml`에 RDBMS 별로 에러 코드가 지정되어 있고 스프링 예외 변환기는 그것을 통해서 예외 변환
